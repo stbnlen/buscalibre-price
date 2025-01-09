@@ -1,5 +1,7 @@
 import requests
 import bs4
+import pandas as pd
+from datetime import datetime
 
 URL = "https://www.buscalibre.cl/v2/pendientes_1722693_l.html"
 
@@ -10,24 +12,33 @@ def get_data():
     response = requests.get(URL, headers=headers)
     if response.status_code == 200:
         soup = bs4.BeautifulSoup(response.text, 'html.parser')
-        parent_div = soup.find('div', class_='listadoProductos')  # Busca el div padre
+        parent_div = soup.find('div', class_='listadoProductos')
         if not parent_div:
             return "Div con clase 'listadoProductos' no encontrado."
 
-        # Buscar los hijos con clase 'contenedorProducto producto'
         product_divs = parent_div.find_all('div', class_='contenedorProducto producto')
-        titles = []
+        products = {}
 
         for product in product_divs:
-            textos_producto = product.find('div', class_='textosProducto')
-            if textos_producto:
-                titulo_div = textos_producto.find('div', class_='titulo')
-                if titulo_div:
-                    titles.append(titulo_div.get_text(strip=True))  # Extrae el texto y elimina espacios extra
+            title = product.find('div', class_='textosProducto')
+            title = title.find('div', class_='titulo').get_text(strip=True) if title and title.find('div', class_='titulo') else None
 
-        return titles
+            price = product.find('div', class_='marcoPrecios')
+            price = price.find('div', class_='precioAhora').get_text(strip=True) if price and price.find('div', class_='precioAhora') else None
+
+            if title and price:
+                products[title] = price
+
+        return products
     else:
         return f"Error: {response.status_code} - {response.reason}"
 
 result = get_data()
-print(result)
+
+if isinstance(result, dict):
+    df = pd.DataFrame(list(result.items()), columns=['Title', 'Price'])
+    current_date = datetime.now().strftime('%m-%d-%Y')
+    filename = f"books_{current_date}.csv"
+    df.to_csv(filename, index=False, encoding='utf-8')
+else:
+    print(result)

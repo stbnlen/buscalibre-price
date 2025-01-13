@@ -52,14 +52,14 @@ class PriceTracker:
     
     def compare_prices(self):
         yesterday_file = f"books_{(datetime.now() - timedelta(days=1)).strftime('%m-%d-%Y')}.csv"
-        
+
         if os.path.exists(yesterday_file):
             yesterday_data = pd.read_csv(yesterday_file).set_index('Title')['Price'].to_dict()
             self.changes = [
-                (title, "Nuevo producto", current_product.price) if old_price is None else
-                (title, "Subió", current_product.price - old_price) if current_product.price > old_price else
-                (title, "Bajó", old_price - current_product.price) if current_product.price < old_price else
-                (title, "Sin cambios", 0)
+                (title, "Nuevo producto", current_product.price, current_product.price) if old_price is None else
+                (title, "Subió", current_product.price - old_price, current_product.price) if current_product.price > old_price else
+                (title, "Bajó", old_price - current_product.price, current_product.price) if current_product.price < old_price else
+                (title, "Sin cambios", 0, current_product.price)
                 for title, current_product in self.current_data.items()
                 for old_price in [yesterday_data.get(title)]
             ]
@@ -67,9 +67,9 @@ class PriceTracker:
             print(f"No se encontró archivo para {yesterday_file}. No se pueden comparar precios.")
 
         self.changes = [change for change in self.changes if change[1] != "Sin cambios"]
-        
+
         if self.changes:
-            pd.DataFrame(self.changes, columns=['Title', 'Status', 'Difference']).to_csv(
+            pd.DataFrame(self.changes, columns=['Title', 'Status', 'Difference', 'Current Price']).to_csv(
                 f"price_changes_{datetime.now().strftime('%m-%d-%Y')}.csv", index=False, encoding='utf-8'
             )
 
@@ -79,9 +79,10 @@ class PriceTracker:
         window = tk.Tk()
         window.title("Cambios de Precios")
 
-        tree = ttk.Treeview(window, columns=('Title', 'Status', 'Difference'), show='headings')
+        tree = ttk.Treeview(window, columns=('Title', 'Status', 'Difference','Current Price'), show='headings')
         tree.heading('Title', text='Producto')
         tree.heading('Status', text='Estado')
+        tree.heading('Current Price', text='Precio Actual')
         tree.heading('Difference', text='Diferencia')
 
         for change in self.changes:

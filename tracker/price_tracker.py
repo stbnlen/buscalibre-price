@@ -17,6 +17,7 @@ class Product:
 class PriceTracker:
     current_data: dict[str, Product] = field(default_factory=dict)
     changes: list[tuple[str, str, float, float]] = field(default_factory=list)
+    price_decreases: list[tuple[str, float, float, float]] = field(default_factory=list)
     URL: str = "https://www.buscalibre.cl/v2/pendientes_1722693_l.html"
 
     def __post_init__(self):
@@ -204,16 +205,25 @@ class PriceTracker:
 
     def compare_prices(self):
         yesterday = (datetime.now() - timedelta(days=1)).date()
-        
+         
         # Obtener precios de ayer desde SQLite
         self.cursor.execute('''
             SELECT title, price FROM book_prices WHERE date = ?
         ''', (yesterday,))
         yesterday_data = dict(self.cursor.fetchall())
-        
+         
+        # Obtener precios mínimos históricos para todos los títulos
+        self.cursor.execute('''
+            SELECT title, MIN(price) FROM book_prices GROUP BY title
+        ''')
+        historical_mins = dict(self.cursor.fetchall())
+         
         self.changes = []
+        self.price_decreases = []
         for title, current_product in self.current_data.items():
             old_price = yesterday_data.get(title)
+            historical_min = historical_mins.get(title)
+            
             if old_price is None:
                 # Nuevo producto
                 self.changes.append((
@@ -238,6 +248,14 @@ class PriceTracker:
                     old_price - current_product.price,
                     current_product.price
                 ))
+                # También registrar para la visualización de disminuciones
+                if historical_min is not None:
+                    self.price_decreases.append((
+                        title,
+                        current_product.price,
+                        old_price,
+                        historical_min
+                    ))
             # else: Sin cambios, no lo agregamos
 
         # Guardar cambios en SQLite en lugar de CSV
@@ -255,7 +273,7 @@ class PriceTracker:
     def show_changes_window(self):
         # Mostrar libros cuyo precio actual es el más bajo históricamente
         min_price_books = self.get_books_with_historical_min_price()
-        
+         
         if min_price_books:
             print("\nLibros con precio actual igual al mínimo histórico:")
             print("-" * 80)
@@ -268,13 +286,33 @@ class PriceTracker:
         else:
             print("No se encontraron libros con precio actual igual al mínimo histórico.")
 
+    def show_price_decreases(self):
+        # Mostrar libros cuyo precio actual es inferior al del día anterior
+        if self.price_decreases:
+            print("\nLibros con precio disminuido respecto al día anterior:")
+            print("=" * 90)
+            for title, current_price, previous_price, historical_min in self.price_decreases:
+                print(f"Título: {title}")
+                print(f"  Precio actual: ${current_price:,.2f}")
+                print(f"  Precio del día anterior: ${previous_price:,.2f}")
+                print(f"  Precio mínimo histórico: ${historical_min:,.2f}")
+                print()
+        else:
+            print("No hay libros con precio disminuido respecto al día anterior.")
+
     def run(self):
         result = self.get_data()
         if isinstance(result, dict):
             self.compare_prices()
+            
+            # Mostrar disminuciones de precio respecto al día anterior
+            if self.price_decreases:
+                self.show_price_decreases()
+                
+            # Mantener funcionalidad existente de cambios (opcional)
             if self.changes:
                 self.show_changes_window()
-            else:
+            elif not self.price_decreases:
                 print("No hubo cambios en los precios.")
         else:
             print(result)

@@ -32,7 +32,8 @@ La aplicación está estructurada en los siguientes componentes principales:
 4. **Comparación**: Se comparan los precios de hoy con los de ayer para detectar cambios
 5. **Detección de disminuciones**: Se identifican los libros cuyo precio ha bajado respecto al día anterior
 6. **Análisis histórico**: Se verifica qué libros están en su precio mínimo histórico jamás registrado
-7. **Reporte**: Se muestra un resumen de los hallazgos en consola
+7. **Reporte tabular**: Se muestra un resumen de los hallazgos en consola utilizando tablas formateadas con pandas para una mejor legibilidad
+8. **Comparaciones significativas**: Para los libros en su mínimo histórico, se muestra la comparación de precios entre hoy y el último precio registrado para identificar movimientos recientes
 
 ### Base de datos
 

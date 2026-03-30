@@ -5,6 +5,7 @@ import requests
 import bs4
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
+import pandas as pd
 
 
 @dataclass
@@ -275,28 +276,61 @@ class PriceTracker:
         min_price_books = self.get_books_with_historical_min_price()
          
         if min_price_books:
-            print("\nLibros con precio actual igual al mínimo histórico:")
-            print("-" * 80)
+            # Get today's date for comparison
+            today = datetime.now().date()
+            
+            # Prepare data for DataFrame
+            enhanced_data = []
             for title, current_price, min_price, date_record in min_price_books:
-                print(f"Título: {title}")
-                print(f"  Precio actual: ${current_price:,.2f}")
-                print(f"  Precio mínimo histórico: ${min_price:,.2f}")
-                print(f"  Fecha del mínimo histórico: {date_record}")
-                print()
+                # Get the last recorded price before today from database
+                self.cursor.execute('''
+                    SELECT price, date FROM book_prices WHERE title = ? AND date < ? ORDER BY date DESC LIMIT 1
+                ''', (title, today))
+                last_price_result = self.cursor.fetchone()
+                if last_price_result:
+                    last_price, last_price_date = last_price_result
+                else:
+                    last_price, last_price_date = None, None
+                
+                # Calculate difference and percentage change if last price exists
+                if last_price is not None:
+                    difference = current_price - last_price
+                    pct_change = (difference / last_price) * 100 if last_price != 0 else 0
+                else:
+                    difference = None
+                    pct_change = None
+                
+                enhanced_data.append((title, current_price, last_price, last_price_date, difference, pct_change, min_price, date_record))
+            
+            # Create DataFrame with enhanced columns
+            df = pd.DataFrame(enhanced_data, 
+                             columns=['Título', 'Precio Hoy', 'Último Precio Registrado', 'Fecha Último Precio', 'Diferencia', '% Cambio', 'Mínimo Histórico', 'Fecha Mínimo Histórico'])
+            
+            # Formatear columnas
+            df['Precio Hoy'] = df['Precio Hoy'].apply(lambda x: f"${x:,.2f}")
+            df['Último Precio Registrado'] = df['Último Precio Registrado'].apply(lambda x: f"${x:,.2f}" if x is not None else "N/A")
+            df['Fecha Último Precio'] = df['Fecha Último Precio'].apply(lambda x: str(x) if x is not None else "N/A")
+            df['Diferencia'] = df['Diferencia'].apply(lambda x: f"{x:+,.2f}" if x is not None else "N/A")
+            df['% Cambio'] = df['% Cambio'].apply(lambda x: f"{x:+.2f}%" if x is not None else "N/A")
+            df['Mínimo Histórico'] = df['Mínimo Histórico'].apply(lambda x: f"${x:,.2f}")
+            
+            print("\nLibros con precio actual igual al mínimo histórico (comparación con último precio registrado):")
+            print(df.to_string(index=False))
         else:
             print("No se encontraron libros con precio actual igual al mínimo histórico.")
 
     def show_price_decreases(self):
         # Mostrar libros cuyo precio actual es inferior al del día anterior
         if self.price_decreases:
+            df = pd.DataFrame(self.price_decreases, 
+                             columns=['Título', 'Precio Actual', 'Precio Día Anterior', 'Mínimo Histórico'])
+            # Formatear columnas de moneda
+            df['Precio Actual'] = df['Precio Actual'].apply(lambda x: f"${x:,.2f}")
+            df['Precio Día Anterior'] = df['Precio Día Anterior'].apply(lambda x: f"${x:,.2f}")
+            df['Mínimo Histórico'] = df['Mínimo Histórico'].apply(lambda x: f"${x:,.2f}")
+            
             print("\nLibros con precio disminuido respecto al día anterior:")
-            print("=" * 90)
-            for title, current_price, previous_price, historical_min in self.price_decreases:
-                print(f"Título: {title}")
-                print(f"  Precio actual: ${current_price:,.2f}")
-                print(f"  Precio del día anterior: ${previous_price:,.2f}")
-                print(f"  Precio mínimo histórico: ${historical_min:,.2f}")
-                print()
+            print(df.to_string(index=False))
         else:
             print("No hay libros con precio disminuido respecto al día anterior.")
 

@@ -1,104 +1,104 @@
 # BuscaLibre Price Tracker
 
-Una aplicación para rastrear y monitorear los precios de libros en BuscaLibre.cl, específicamente enfocada en detectar disminuciones de precios y registrar el historial de precios para análisis.
+An application to track and monitor book prices on BuscaLibre.cl, specifically focused on detecting price decreases and recording price history for analysis.
 
-## ¿Qué hace?
+## What does it do?
 
-Esta aplicación realiza las siguientes funciones principales:
+This application performs the following main functions:
 
-1. **Rastreo de precios diarios**: Extrae los precios actuales de libros de una lista específica en BuscaLibre.cl
-2. **Almacenamiento histórico**: Guarda todos los precios recopilados en una base de datos SQLite para mantener un historial completo
-3. **Detección de cambios**: Identifica cuando los precios de los libros han disminuido respecto al día anterior
-4. **Análisis de mínimos históricos**: Determina qué libros están actualmente en su precio más bajo jamás registrado
-5. **Reportes detallados**: Genera informes claros sobre las disminuciones de precios y los mínimos históricos
+1. **Daily price tracking**: Extracts current book prices from a specific list on BuscaLibre.cl
+2. **Historical storage**: Saves all collected prices in a SQLite database to maintain a complete history
+3. **Change detection**: Identifies when book prices have decreased compared to the previous day
+4. **Historical low analysis**: Determines which books are currently at their lowest price ever recorded
+5. **Detailed reports**: Generates clear reports on price decreases and historical lows
 
-## ¿Cómo funciona?
+## How does it work?
 
-### Arquitectura
+### Architecture
 
-La aplicación está estructurada en los siguientes componentes principales:
+The application is structured into the following main components:
 
-- `main.py`: Punto de entrada de la aplicación
-- `tracker/price_tracker.py`: Contiene la lógica principal de rastreo, almacenamiento y análisis
-- `tracker/models.py`: Define las estructuras de datos utilizadas (actualmente vacía, mantenida para futura expansión)
-- `buscalibre_prices.sqlite`: Base de datos SQLite que almacena todo el historial de precios
-- `test_price_decreases.py`: Script de prueba para validar la lógica de detección de disminuciones
+- `main.py`: Application entry point
+- `tracker/price_tracker.py`: Contains the main tracking, storage, and analysis logic
+- `tracker/models.py`: Defines the data structures used (currently empty, maintained for future expansion)
+- `buscalibre_prices.sqlite`: SQLite database that stores the entire price history
+- `test_price_decreases.py`: Test script to validate the decrease detection logic
 
-### Flujo de trabajo
+### Workflow
 
-1. **Inicialización**: Al ejecutar la aplicación, se inicializa la base de datos SQLite si no existe
-2. **Extracción de datos**: La aplicación obtiene los datos actuales de precios desde BuscaLibre.cl mediante web scraping
-3. **Almacenamiento**: Los precios se guardan en la tabla `book_prices` con la fecha actual
-4. **Comparación**: Se comparan los precios de hoy con los de ayer para detectar cambios
-5. **Detección de disminuciones**: Se identifican los libros cuyo precio ha bajado respecto al día anterior
-6. **Análisis histórico**: Se verifica qué libros están en su precio mínimo histórico jamás registrado
-7. **Reporte tabular**: Se muestra un resumen de los hallazgos en consola utilizando tablas formateadas con pandas para una mejor legibilidad
-8. **Comparaciones significativas**: Para los libros en su mínimo histórico, se muestra la comparación de precios entre hoy y el último precio registrado para identificar movimientos recientes
+1. **Initialization**: When running the application, the SQLite database is initialized if it doesn't exist
+2. **Data extraction**: The application retrieves current price data from BuscaLibre.cl via web scraping
+3. **Storage**: Prices are saved in the `book_prices` table with the current date
+4. **Comparison**: Today's prices are compared with yesterday's to detect changes
+5. **Decrease detection**: Books whose prices have dropped compared to the previous day are identified
+6. **Historical analysis**: Checks which books are at their all-time lowest price ever recorded
+7. **Tabular report**: Displays a summary of findings in the console using formatted tables with pandas for better readability
+8. **Meaningful comparisons**: For books at their historical low, a price comparison between today and the last recorded price is shown to identify recent movements
 
-### Base de datos
+### Database
 
-La aplicación utiliza una base de datos SQLite (`buscalibre_prices.sqlite`) con dos tablas principales:
+The application uses a SQLite database (`buscalibre_prices.sqlite`) with two main tables:
 
 #### `book_prices`
-- `id`: Clave primaria
-- `title`: Título del libro
-- `price`: Precio registrado
-- `date`: Fecha del registro
-- `created_at`: Timestamp de creación
-- Constraint único: `(title, date)` para evitar duplicados del mismo libro en la misma fecha
+- `id`: Primary key
+- `title`: Book title
+- `price`: Recorded price
+- `date`: Record date
+- `created_at`: Creation timestamp
+- Unique constraint: `(title, date)` to prevent duplicates of the same book on the same date
 
 #### `price_changes`
-- `id`: Clave primaria
-- `title`: Título del libro
-- `change_type`: Tipo de cambio ("Subió", "Bajó", "Nuevo producto")
-- `difference`: Diferencia absoluta en precio
-- `new_price`: Nuevo precio después del cambio
-- `date`: Fecha del cambio
-- `created_at`: Timestamp de creación
+- `id`: Primary key
+- `title`: Book title
+- `change_type`: Change type ("Increased", "Decreased", "New product")
+- `difference`: Absolute price difference
+- `new_price`: New price after the change
+- `date`: Change date
+- `created_at`: Creation timestamp
 
-## Requisitos
+## Requirements
 
 - Python 3.x
-- Bibliotecas de Python:
+- Python libraries:
   - requests
   - beautifulsoup4 (bs4)
-  - sqlite3 (incluido en Python estándar)
+  - sqlite3 (included in Python standard library)
 
-Para instalar las dependencias:
+To install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-## Uso
+## Usage
 
-Ejecutar la aplicación:
+Run the application:
 ```bash
 python main.py
 ```
 
-Ejecutar las pruebas de validación:
+Run validation tests:
 ```bash
 python test_price_decreases.py
 ```
 
-## Notas importantes
+## Important notes
 
-1. **Datos históricos**: La base de datos SQLite contiene datos irreproducibles (precios históricos), por lo que es esencial mantenerla versionada en Git para preservar el historial al cambiar entre equipos.
+1. **Historical data**: The SQLite database contains irreproducible data (historical prices), so it is essential to keep it versioned in Git to preserve the history when switching between machines.
 
-2. **Archivos de debug**: La aplicación crea un archivo `debug.html` durante la ejecución para facilitar la depuración del scraping. Este archivo está intencionalmente excluido del versionado mediante `.gitignore`.
+2. **Debug files**: The application creates a `debug.html` file during execution to facilitate scraping debugging. This file is intentionally excluded from versioning via `.gitignore`.
 
-3. **Frecuencia de ejecución**: Para obtener el máximo valor de esta aplicación, se recomienda ejecutarla diariamente (por ejemplo, mediante cron o Task Scheduler) para capturar los cambios de precio día a día.
+3. **Execution frequency**: To get the most value from this application, it is recommended to run it daily (e.g., via cron or Task Scheduler) to capture day-to-day price changes.
 
-4. **Manejo de errores**: Si el sitio web no está disponible o cambia su estructura, la aplicación tiene un modo de respaldo que utiliza datos de demostración para mostrar que el sistema funciona correctamente.
+4. **Error handling**: If the website is unavailable or changes its structure, the application has a fallback mode that uses demo data to show that the system works correctly.
 
-## Personalización
+## Customization
 
-Para monitorear una lista diferente de libros en BuscaLibre.cl, modifique la constante `URL` en la clase `PriceTracker` dentro de `tracker/price_tracker.py`:
+To monitor a different list of books on BuscaLibre.cl, modify the `URL` constant in the `PriceTracker` class within `tracker/price_tracker.py`:
 
 ```python
 URL: str = "https://www.buscalibre.cl/v2/pendientes_1722693_l.html"
 ```
 
-## Licencia
+## License
 
-Este proyecto está bajo licencia MIT - ve el archivo LICENSE para más detalles.
+This project is under the MIT License - see the LICENSE file for more details.

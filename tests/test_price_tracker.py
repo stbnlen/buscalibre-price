@@ -211,41 +211,16 @@ class TestHistoricalMinPrice:
         assert result[0][3] == str(today)
 
 
-class TestDemoData:
-    """Pruebas para el método _get_demo_data"""
+class TestGetDataFailure:
+    """Pruebas para get_data cuando falla el scraping"""
 
-    def test_demo_data_returns_dict(self, price_tracker):
-        """_get_demo_data retorna un diccionario"""
-        result = price_tracker._get_demo_data()
-        assert isinstance(result, dict)
+    def test_network_error_returns_none(self, price_tracker):
+        """Cuando falla el scraping por error de red, retorna None"""
+        with patch('requests.Session') as mock_session_class:
+            mock_session_class.side_effect = Exception("Network error")
 
-    def test_demo_data_contains_products(self, price_tracker):
-        """Los datos demo contienen objetos Product"""
-        result = price_tracker._get_demo_data()
-        for key, value in result.items():
-            assert isinstance(value, Product)
-            assert key == value.title
-
-    def test_demo_data_has_expected_books(self, price_tracker):
-        """Los datos demo contienen los libros esperados"""
-        result = price_tracker._get_demo_data()
-        expected_titles = [
-            "Don Quijote de la Mancha",
-            "Cien años de soledad",
-            "Rayuela",
-            "Pedro Páramo",
-            "La casa de los espíritus"
-        ]
-        for title in expected_titles:
-            assert title in result
-
-    def test_demo_data_persists_to_db(self, price_tracker):
-        """Los datos demo se guardan en la base de datos"""
-        price_tracker._get_demo_data()
-
-        price_tracker.cursor.execute("SELECT COUNT(*) FROM book_prices")
-        count = price_tracker.cursor.fetchone()[0]
-        assert count >= 5  # Al menos 5 libros demo
+            result = price_tracker.get_data()
+            assert result is None
 
 
 class TestGetWithMockedRequests:
@@ -285,18 +260,16 @@ class TestGetWithMockedRequests:
             assert "Libro Test 1" in result
             assert result["Libro Test 1"].price == 1234.56
 
-    def test_scraping_falls_back_to_demo(self, price_tracker):
-        """Cuando falla el scraping, usa datos demo"""
+    def test_scraping_failure_returns_none(self, price_tracker):
+        """Cuando falla el scraping, retorna None"""
         with patch('requests.Session') as mock_session_class:
             mock_session_class.side_effect = Exception("Network error")
 
             result = price_tracker.get_data()
+            assert result is None
 
-            assert isinstance(result, dict)
-            assert len(result) == 5  # 5 libros demo
-
-    def test_non_200_status_falls_back(self, price_tracker):
-        """Cuando el status no es 200/202, retorna string de error (no demo)"""
+    def test_non_200_status_returns_error(self, price_tracker):
+        """Cuando el status no es 200/202, retorna string de error"""
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_response.reason = "Server Error"
@@ -308,8 +281,6 @@ class TestGetWithMockedRequests:
             mock_session_class.return_value = mock_session
 
             result = price_tracker.get_data()
-            # El código actual retorna un string de error, no demo data
-            # Esto es comportamiento esperado según la implementación
             assert isinstance(result, str)
             assert "Error" in result
             assert "500" in result
@@ -375,13 +346,13 @@ class TestRun:
         # Verificar que se compararon precios
         assert len(price_tracker_with_data.changes) > 0
 
-    def test_run_handles_error_result(self, price_tracker, capsys):
-        """run maneja correctamente un resultado de error"""
-        with patch.object(price_tracker, 'get_data', return_value="Error: 500"):
+    def test_run_handles_none_result(self, price_tracker, capsys):
+        """run maneja correctamente cuando get_data retorna None"""
+        with patch.object(price_tracker, 'get_data', return_value=None):
             price_tracker.run()
 
         captured = capsys.readouterr()
-        assert "Error" in captured.out or "500" in captured.out
+        assert "No se pudieron obtener" in captured.out
 
     def test_run_no_changes_message(self, price_tracker, capsys):
         """run muestra mensaje cuando no hay cambios"""
@@ -419,19 +390,13 @@ class TestEdgeCases:
         assert changes == []
         assert price_tracker.price_decreases == []
 
-    def test_yesterday_has_no_data(self, price_tracker):
-        """Maneja cuando no hay datos de ayer"""
-        today = date.today()
-
+    def test_no_previous_data_detects_new(self, price_tracker):
+        """Maneja cuando no hay datos previos"""
         price_tracker.current_data = {
             'New Book': Product(title='New Book', price=50.0)
         }
 
-        # No insertar datos de ayer
-        price_tracker.conn.commit()
-
         changes = price_tracker.compare_prices()
-        # Debe ser detectado como nuevo producto
         assert len(changes) == 1
         assert changes[0][1] == "Nuevo producto"
 

@@ -19,6 +19,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from tracker.models import Product
+from tracker.schema import init_database
 
 DEFAULT_URL: str = "https://www.buscalibre.cl/v2/pendientes_1722693_l.html"
 DEFAULT_DB_PATH: str = "buscalibre_prices.sqlite"
@@ -74,34 +75,7 @@ class PriceTracker:
         try:
             self._conn = sqlite3.connect(self.db_path)
             self._cursor = self.conn.cursor()
-
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS book_prices (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title TEXT NOT NULL,
-                    price REAL NOT NULL,
-                    date DATE NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(title, date)
-                )
-            ''')
-
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS price_changes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title TEXT NOT NULL,
-                    change_type TEXT NOT NULL,
-                    difference REAL NOT NULL,
-                    new_price REAL NOT NULL,
-                    date DATE NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-
-            self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_book_prices_date ON book_prices(date)')
-            self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_book_prices_title_date ON book_prices(title, date)')
-            self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_price_changes_date ON price_changes(date)')
-
+            init_database(self.cursor)
             self.conn.commit()
         except sqlite3.Error as e:
             logger.error("Failed to initialize database: %s", e)

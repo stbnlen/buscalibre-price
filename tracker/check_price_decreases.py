@@ -1,65 +1,76 @@
 #!/usr/bin/env python3
-"""
-Utility script to check for price decreases in the production database.
+"""Script de utilidad para verificar disminuciones de precio en la base de datos de producción.
 
-This is NOT a pytest test file. It's a diagnostic tool for checking
-real price data.
+Este NO es un archivo de test de pytest. Es una herramienta de diagnóstico
+para verificar datos de precios reales.
 
 Usage:
-    python check_price_decreases.py
+    python -m tracker.check_price_decreases
 """
+
+from __future__ import annotations
 
 import logging
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# Configure logging
+from tracker.schema import init_database
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 DB_PATH: Path = Path("buscalibre_prices.sqlite")
 
 
-def check_price_decreases() -> None:
-    """Check for price decreases in the production database."""
-    if not DB_PATH.exists():
-        logger.warning("Database not found at %s", DB_PATH)
+def check_price_decreases(db_path: Path | None = None) -> None:
+    """Verifica disminuciones de precio en la base de datos de producción.
+
+    Compara los precios de hoy con los de ayer e identifica libros
+    cuyo precio haya disminuido, mostrando también el mínimo histórico.
+
+    Args:
+        db_path: Ruta a la base de datos. Usa DB_PATH por defecto.
+    """
+    path = db_path or DB_PATH
+
+    if not path.exists():
+        logger.warning("Base de datos no encontrada en %s", path)
         return
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(path)
     cursor = conn.cursor()
 
     try:
-        # Get today and yesterday
+        init_database(cursor)
+        conn.commit()
+
         today = datetime.now().date()
         yesterday = today - timedelta(days=1)
 
         logger.info("Fecha actual: %s", today)
         logger.info("Fecha ayer: %s", yesterday)
 
-        # Get today's prices
-        cursor.execute('''
-            SELECT title, price FROM book_prices WHERE date = ?
-        ''', (today,))
+        cursor.execute(
+            'SELECT title, price FROM book_prices WHERE date = ?',
+            (today,),
+        )
         today_data = dict(cursor.fetchall())
 
-        # Get yesterday's prices
-        cursor.execute('''
-            SELECT title, price FROM book_prices WHERE date = ?
-        ''', (yesterday,))
+        cursor.execute(
+            'SELECT title, price FROM book_prices WHERE date = ?',
+            (yesterday,),
+        )
         yesterday_data = dict(cursor.fetchall())
 
-        # Get historical minimums
-        cursor.execute('''
-            SELECT title, MIN(price) FROM book_prices GROUP BY title
-        ''')
+        cursor.execute(
+            'SELECT title, MIN(price) FROM book_prices GROUP BY title'
+        )
         historical_mins = dict(cursor.fetchall())
 
         logger.info("\nLibros con datos de hoy: %d", len(today_data))
         logger.info("Libros con datos de ayer: %d", len(yesterday_data))
 
-        # Find decreases
         decreases = []
         for title, current_price in today_data.items():
             if title in yesterday_data:
@@ -85,7 +96,7 @@ def check_price_decreases() -> None:
             print("No se encontraron libros con precio disminuido respecto al día anterior.")
 
     except sqlite3.Error as e:
-        logger.error("Database error: %s", e)
+        logger.error("Error de base de datos: %s", e)
     finally:
         conn.close()
 

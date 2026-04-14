@@ -1,33 +1,11 @@
 """Pruebas comprehensivas para la clase PriceTracker"""
 
 import pytest
-import sqlite3
 from datetime import date, timedelta
 from unittest.mock import patch, MagicMock
 
-from tracker.price_tracker import PriceTracker, Product
-
-
-class TestProduct:
-    """Pruebas para la clase Product"""
-
-    def test_product_creation(self):
-        """Se puede crear un producto correctamente"""
-        product = Product(title="Test Book", price=100.0)
-        assert product.title == "Test Book"
-        assert product.price == 100.0
-
-    def test_product_equality(self):
-        """Dos productos con mismos datos son iguales"""
-        p1 = Product(title="Book", price=50.0)
-        p2 = Product(title="Book", price=50.0)
-        assert p1 == p2
-
-    def test_product_inequality(self):
-        """Productos con distintos datos no son iguales"""
-        p1 = Product(title="Book A", price=50.0)
-        p2 = Product(title="Book B", price=50.0)
-        assert p1 != p2
+from tracker.price_tracker import PriceTracker
+from tracker.models import Product
 
 
 class TestPriceTrackerInit:

@@ -1,14 +1,16 @@
-"""Configuration and fixtures for pytest tests"""
+"""Configuración y fixtures para los tests de pytest"""
 
-import pytest
+import os
 import sqlite3
+import tempfile
 from datetime import date, timedelta
 from pathlib import Path
-import tempfile
-import os
 
-from tracker.price_tracker import PriceTracker
+import pytest
+
 from tracker.models import Product
+from tracker.price_tracker import PriceTracker
+from tracker.schema import init_database
 
 
 @pytest.fixture
@@ -25,33 +27,10 @@ def temp_db_path():
 
 @pytest.fixture
 def temp_db(temp_db_path):
-    """Creates a temporary database with initialized tables"""
+    """Crea una base de datos temporal con tablas inicializadas."""
     conn = sqlite3.connect(temp_db_path)
     cursor = conn.cursor()
-
-    cursor.execute('''
-        CREATE TABLE book_prices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            price REAL NOT NULL,
-            date DATE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(title, date)
-        )
-    ''')
-
-    cursor.execute('''
-        CREATE TABLE price_changes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            change_type TEXT NOT NULL,
-            difference REAL NOT NULL,
-            new_price REAL NOT NULL,
-            date DATE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
+    init_database(cursor)
     conn.commit()
     conn.close()
 

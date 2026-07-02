@@ -19,14 +19,13 @@ class TestCheckPriceDecreases:
         check_price_decreases(db_path=nonexistent)
         assert "no encontrada" in caplog.text.lower()
 
-    def test_sin_disminuciones(self, temp_db, capsys):
-        """Muestra mensaje cuando no hay disminuciones."""
-        check_price_decreases(db_path=temp_db)
-        captured = capsys.readouterr()
-        assert "No se encontraron" in captured.out
+    def test_sin_disminuciones(self, temp_db):
+        """Retorna mensaje cuando no hay disminuciones."""
+        output = check_price_decreases(db_path=temp_db)
+        assert "No se encontraron" in output
 
-    def test_con_disminuciones(self, temp_db, capsys):
-        """Muestra libros con precio disminuido."""
+    def test_con_disminuciones(self, temp_db):
+        """Retorna libros con precio disminuido."""
         today = date.today()
         yesterday = today - timedelta(days=1)
 
@@ -39,13 +38,12 @@ class TestCheckPriceDecreases:
         conn.commit()
         conn.close()
 
-        check_price_decreases(db_path=temp_db)
-        captured = capsys.readouterr()
-        assert "Book A" in captured.out
-        assert "DISMINUIDO" in captured.out
+        output = check_price_decreases(db_path=temp_db)
+        assert "Book A" in output
+        assert "DISMINUIDO" in output
 
-    def test_sin_datos_de_hoy(self, temp_db, capsys):
-        """Muestra mensaje cuando no hay datos de hoy."""
+    def test_sin_datos_de_hoy(self, temp_db):
+        """Retorna mensaje cuando no hay datos de hoy."""
         yesterday = date.today() - timedelta(days=1)
 
         conn = sqlite3.connect(temp_db)
@@ -57,12 +55,11 @@ class TestCheckPriceDecreases:
         conn.commit()
         conn.close()
 
-        check_price_decreases(db_path=temp_db)
-        captured = capsys.readouterr()
-        assert "No se encontraron" in captured.out
+        output = check_price_decreases(db_path=temp_db)
+        assert "No se encontraron" in output
 
-    def test_precio_subido_no_mostrado(self, temp_db, capsys):
-        """No muestra libros cuyo precio subió."""
+    def test_precio_subido_no_mostrado(self, temp_db):
+        """No retorna libros cuyo precio subió."""
         today = date.today()
         yesterday = today - timedelta(days=1)
 
@@ -75,6 +72,5 @@ class TestCheckPriceDecreases:
         conn.commit()
         conn.close()
 
-        check_price_decreases(db_path=temp_db)
-        captured = capsys.readouterr()
-        assert "Book B" not in captured.out
+        output = check_price_decreases(db_path=temp_db)
+        assert "Book B" not in output

@@ -1,14 +1,23 @@
-"""Data models for the price tracker application."""
+"""Data models and type aliases for the price tracker application."""
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import TypeAlias
 
 logger = logging.getLogger(__name__)
 
+# Type aliases used across the tracker package.
+# title, change_type, difference, new_price
+PriceChange: TypeAlias = tuple[str, str, float, float]
+# title, current_price, old_price, historical_min
+PriceDecrease: TypeAlias = tuple[str, float, float, float]
+# title, current_price, historical_min, first_min_date
+HistoricalMinBook: TypeAlias = tuple[str, float, float, str]
 
-@dataclass
+
+@dataclass(frozen=True, slots=True)
 class Product:
     """Represents a book product with its price.
 

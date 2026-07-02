@@ -1,9 +1,11 @@
 """Pruebas comprehensivas para la clase PriceTracker"""
 
 import pytest
+import requests
 from datetime import date, timedelta
 from unittest.mock import patch, MagicMock
 
+from tracker.exceptions import NetworkError, ScrapingError
 from tracker.price_tracker import PriceTracker
 from tracker.models import Product
 
@@ -192,13 +194,15 @@ class TestHistoricalMinPrice:
 class TestGetDataFailure:
     """Pruebas para get_data cuando falla el scraping"""
 
-    def test_network_error_returns_none(self, price_tracker):
-        """Cuando falla el scraping por error de red, retorna None"""
+    def test_network_error_raises_scraping_error(self, price_tracker):
+        """Cuando falla el scraping por error de red, lanza ScrapingError"""
         with patch('requests.Session') as mock_session_class:
-            mock_session_class.side_effect = Exception("Network error")
+            mock_session_class.side_effect = requests.RequestException(
+                "Network error"
+            )
 
-            result = price_tracker.get_data()
-            assert result is None
+            with pytest.raises(ScrapingError):
+                price_tracker.get_data()
 
 
 class TestGetWithMockedRequests:
@@ -238,16 +242,18 @@ class TestGetWithMockedRequests:
             assert "Libro Test 1" in result
             assert result["Libro Test 1"].price == 1234.56
 
-    def test_scraping_failure_returns_none(self, price_tracker):
-        """Cuando falla el scraping, retorna None"""
+    def test_scraping_failure_raises_error(self, price_tracker):
+        """Cuando falla el scraping, lanza ScrapingError"""
         with patch('requests.Session') as mock_session_class:
-            mock_session_class.side_effect = Exception("Network error")
+            mock_session_class.side_effect = requests.RequestException(
+                "Network error"
+            )
 
-            result = price_tracker.get_data()
-            assert result is None
+            with pytest.raises(ScrapingError):
+                price_tracker.get_data()
 
-    def test_non_200_status_returns_error(self, price_tracker):
-        """Cuando el status no es 200/202, retorna string de error"""
+    def test_non_200_status_raises_error(self, price_tracker):
+        """Cuando el status no es 200, lanza NetworkError"""
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_response.reason = "Server Error"
@@ -258,35 +264,31 @@ class TestGetWithMockedRequests:
             mock_session.get.return_value = mock_response
             mock_session_class.return_value = mock_session
 
-            result = price_tracker.get_data()
-            assert isinstance(result, str)
-            assert "Error" in result
-            assert "500" in result
+            with pytest.raises(NetworkError):
+                price_tracker.get_data()
 
 
 class TestShowMethods:
     """Pruebas para los métodos de visualización"""
 
-    def test_show_price_decreases_with_data(self, price_tracker_with_data, capsys):
-        """show_price_decreases muestra datos correctamente"""
+    def test_show_price_decreases_with_data(self, price_tracker_with_data):
+        """show_price_decreases retorna datos correctamente"""
         tracker = price_tracker_with_data
         tracker.compare_prices()
-        tracker.show_price_decreases()
+        output = tracker.show_price_decreases()
 
-        captured = capsys.readouterr()
-        assert "Libro A" in captured.out
-        assert "disminuido" in captured.out.lower() or "Libro A" in captured.out
+        assert "Libro A" in output
+        assert "disminuido" in output.lower()
 
-    def test_show_price_decreases_no_data(self, price_tracker, capsys):
-        """show_price_decreases muestra mensaje cuando no hay datos"""
+    def test_show_price_decreases_no_data(self, price_tracker):
+        """show_price_decreases retorna mensaje cuando no hay datos"""
         tracker = price_tracker
-        tracker.show_price_decreases()
+        output = tracker.show_price_decreases()
 
-        captured = capsys.readouterr()
-        assert "No hay libros" in captured.out or "disminuido" in captured.out.lower()
+        assert "No hay libros" in output
 
-    def test_show_changes_window_with_historical_min(self, price_tracker, capsys):
-        """show_changes_window muestra libros en mínimo histórico"""
+    def test_show_changes_window_with_historical_min(self, price_tracker):
+        """show_changes_window retorna libros en mínimo histórico"""
         today = date.today()
         yesterday = today - timedelta(days=1)
 
@@ -298,17 +300,16 @@ class TestShowMethods:
         ])
         price_tracker.conn.commit()
 
-        price_tracker.show_changes_window()
+        output = price_tracker.show_changes_window()
 
-        captured = capsys.readouterr()
-        assert "mínimo histórico" in captured.out.lower() or "Book Min" in captured.out
+        assert "mínimo histórico" in output.lower()
+        assert "Book Min" in output
 
-    def test_show_changes_window_no_data(self, price_tracker, capsys):
-        """show_changes_window muestra mensaje cuando no hay datos"""
-        price_tracker.show_changes_window()
+    def test_show_changes_window_no_data(self, price_tracker):
+        """show_changes_window retorna mensaje cuando no hay datos"""
+        output = price_tracker.show_changes_window()
 
-        captured = capsys.readouterr()
-        assert "No se encontraron" in captured.out or "mínimo histórico" in captured.out.lower()
+        assert "No se encontraron" in output
 
 
 class TestRun:
@@ -324,9 +325,11 @@ class TestRun:
         # Verificar que se compararon precios
         assert len(price_tracker_with_data.changes) > 0
 
-    def test_run_handles_none_result(self, price_tracker, capsys):
-        """run maneja correctamente cuando get_data retorna None"""
-        with patch.object(price_tracker, 'get_data', return_value=None):
+    def test_run_handles_scraping_error(self, price_tracker, capsys):
+        """run maneja correctamente cuando get_data lanza ScrapingError"""
+        with patch.object(
+            price_tracker, 'get_data', side_effect=ScrapingError("fail")
+        ):
             price_tracker.run()
 
         captured = capsys.readouterr()

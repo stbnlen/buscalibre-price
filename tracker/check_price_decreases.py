@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Script de utilidad para verificar disminuciones de precio en la base de datos de producción.
+"""Script de utilidad para verificar disminuciones de precio en la base de datos.
 
 Este NO es un archivo de test de pytest. Es una herramienta de diagnóstico
 para verificar datos de precios reales.
@@ -11,95 +11,57 @@ Usage:
 from __future__ import annotations
 
 import logging
-import sqlite3
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
-from tracker.schema import init_database
+from tracker.analyzer import detect_decreases_between_dates
+from tracker.config import DEFAULT_DB_PATH
+from tracker.repository import PriceRepository
+from tracker.reporter import format_check_decreases
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
-DB_PATH: Path = Path("buscalibre_prices.sqlite")
 
-
-def check_price_decreases(db_path: Path | None = None) -> None:
+def check_price_decreases(db_path: Path | None = None) -> str:
     """Verifica disminuciones de precio en la base de datos de producción.
 
     Compara los precios de hoy con los de ayer e identifica libros
     cuyo precio haya disminuido, mostrando también el mínimo histórico.
 
     Args:
-        db_path: Ruta a la base de datos. Usa DB_PATH por defecto.
+        db_path: Ruta a la base de datos. Usa ``DEFAULT_DB_PATH`` por defecto.
+
+    Returns:
+        Reporte formateado como string.
     """
-    path = db_path or DB_PATH
+    path = db_path or DEFAULT_DB_PATH
 
     if not path.exists():
-        logger.warning("Base de datos no encontrada en %s", path)
-        return
+        message = f"Base de datos no encontrada en {path}"
+        logger.warning(message)
+        return message
 
-    conn = sqlite3.connect(path)
-    cursor = conn.cursor()
+    today = date.today()
+    yesterday = today - timedelta(days=1)
 
-    try:
-        init_database(cursor)
-        conn.commit()
+    with PriceRepository(path) as repository:
+        today_data = repository.get_prices_for_date(today)
+        yesterday_data = repository.get_prices_for_date(yesterday)
+        historical_mins = repository.get_historical_mins()
 
-        today = datetime.now().date()
-        yesterday = today - timedelta(days=1)
+    logger.info("Fecha actual: %s", today)
+    logger.info("Fecha ayer: %s", yesterday)
+    logger.info("\nLibros con datos de hoy: %d", len(today_data))
+    logger.info("Libros con datos de ayer: %d", len(yesterday_data))
 
-        logger.info("Fecha actual: %s", today)
-        logger.info("Fecha ayer: %s", yesterday)
+    decreases = detect_decreases_between_dates(
+        today_data, yesterday_data, historical_mins
+    )
 
-        cursor.execute(
-            'SELECT title, price FROM book_prices WHERE date = ?',
-            (today,),
-        )
-        today_data = dict(cursor.fetchall())
-
-        cursor.execute(
-            'SELECT title, price FROM book_prices WHERE date = ?',
-            (yesterday,),
-        )
-        yesterday_data = dict(cursor.fetchall())
-
-        cursor.execute(
-            'SELECT title, MIN(price) FROM book_prices GROUP BY title'
-        )
-        historical_mins = dict(cursor.fetchall())
-
-        logger.info("\nLibros con datos de hoy: %d", len(today_data))
-        logger.info("Libros con datos de ayer: %d", len(yesterday_data))
-
-        decreases = []
-        for title, current_price in today_data.items():
-            if title in yesterday_data:
-                old_price = yesterday_data[title]
-                historical_min = historical_mins.get(title, 0)
-
-                if current_price < old_price:
-                    decreases.append((title, current_price, old_price, historical_min))
-
-        logger.info("\nLibros con precio disminuido: %d", len(decreases))
-
-        if decreases:
-            print("\n" + "=" * 90)
-            print("LIBROS CON PRECIO DISMINUIDO RESPECTO AL DÍA ANTERIOR:")
-            print("=" * 90)
-            for title, current_price, previous_price, historical_min in decreases[:10]:
-                print(f"Título: {title}")
-                print(f"  Precio actual: ${current_price:,.2f}")
-                print(f"  Precio del día anterior: ${previous_price:,.2f}")
-                print(f"  Precio mínimo histórico: ${historical_min:,.2f}")
-                print()
-        else:
-            print("No se encontraron libros con precio disminuido respecto al día anterior.")
-
-    except sqlite3.Error as e:
-        logger.error("Error de base de datos: %s", e)
-    finally:
-        conn.close()
+    logger.info("\nLibros con precio disminuido: %d", len(decreases))
+    return format_check_decreases(decreases)
 
 
 if __name__ == "__main__":
-    check_price_decreases()
+    print(check_price_decreases())

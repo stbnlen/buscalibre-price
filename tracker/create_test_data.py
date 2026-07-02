@@ -13,19 +13,25 @@ from __future__ import annotations
 
 import logging
 import random
-import sqlite3
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
-from tracker.schema import init_database
+from tracker.config import DEFAULT_DB_PATH
+from tracker.repository import PriceRepository
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-DB_PATH: Path = Path("buscalibre_prices.sqlite")
+# Fixed seed so test runs are deterministic.
+DEFAULT_SEED = 42
+DEFAULT_LIMIT = 5
 
 
-def create_test_data(db_path: Path | None = None) -> None:
+def create_test_data(
+    db_path: Path | None = None,
+    seed: int = DEFAULT_SEED,
+    limit: int = DEFAULT_LIMIT,
+) -> None:
     """Crea datos de prueba para ayer basado en los precios de hoy.
 
     Lee los datos de precio de hoy desde la base de datos y crea los datos
@@ -33,27 +39,23 @@ def create_test_data(db_path: Path | None = None) -> None:
     para asegurar ejecución idempotente.
 
     Args:
-        db_path: Ruta a la base de datos. Usa DB_PATH por defecto.
+        db_path: Ruta a la base de datos. Usa ``DEFAULT_DB_PATH`` por defecto.
+        seed: Semilla para el generador aleatorio. Por defecto 42.
+        limit: Máximo de libros a procesar. Por defecto 5.
     """
-    path = db_path or DB_PATH
-    conn = sqlite3.connect(path)
-    cursor = conn.cursor()
+    path = db_path or DEFAULT_DB_PATH
+    rng = random.Random(seed)
 
-    try:
-        init_database(cursor)
-        conn.commit()
+    today = date.today()
+    yesterday = today - timedelta(days=1)
 
-        today = datetime.now().date()
-        yesterday = today - timedelta(days=1)
+    logger.info("Fecha actual: %s", today)
+    logger.info("Fecha ayer: %s", yesterday)
 
-        logger.info("Fecha actual: %s", today)
-        logger.info("Fecha ayer: %s", yesterday)
-
-        cursor.execute(
-            'SELECT title, price FROM book_prices WHERE date = ? LIMIT 5',
-            (today,),
-        )
-        today_books = cursor.fetchall()
+    with PriceRepository(path) as repository:
+        today_books = list(repository.get_prices_for_date(today).items())[
+            :limit
+        ]
 
         if not today_books:
             logger.info("No hay datos de hoy para crear datos de prueba.")
@@ -65,25 +67,14 @@ def create_test_data(db_path: Path | None = None) -> None:
         )
 
         for title, price in today_books:
-            variation = random.uniform(-0.1, 0.1)
+            variation = rng.uniform(-0.1, 0.1)
             yesterday_price = price * (1 + variation)
-
-            cursor.execute(
-                'INSERT OR REPLACE INTO book_prices (title, price, date) VALUES (?, ?, ?)',
-                (title, yesterday_price, yesterday),
+            repository.save_price(title, yesterday_price, yesterday)
+            logger.info(
+                "  %s: Hoy=$%.2f, Ayer=$%.2f", title, price, yesterday_price
             )
 
-            logger.info("  %s: Hoy=$%.2f, Ayer=$%.2f", title, price, yesterday_price)
-
-        conn.commit()
-        logger.info("Datos de prueba insertados correctamente.")
-
-    except sqlite3.Error as e:
-        logger.error("Error de base de datos: %s", e)
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    logger.info("Datos de prueba insertados correctamente.")
 
 
 if __name__ == "__main__":
